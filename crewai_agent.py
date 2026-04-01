@@ -4,6 +4,7 @@ from crewai_tools import SerperDevTool, ScrapeWebsiteTool
 import uvicorn
 import os
 from pathlib import Path
+from typing import Any
 
 def load_local_env() -> None:
     env_path = Path(__file__).resolve().parent / ".env"
@@ -23,9 +24,23 @@ load_local_env()
 
 app = FastAPI(title="CrewAI A2A Agent")
 
+# -------------------------------------------------------
+# CONTEXT-BOUNDED SCRAPE TOOL
+# Caps scraped page content to ~4000 chars (~1000 tokens)
+# to prevent a single webpage from flooding the context window.
+# -------------------------------------------------------
+MAX_SCRAPE_CHARS = 4000
+
+class BoundedScrapeWebsiteTool(ScrapeWebsiteTool):
+    def _run(self, **kwargs: Any) -> Any:
+        result = super()._run(**kwargs)
+        if isinstance(result, str) and len(result) > MAX_SCRAPE_CHARS:
+            return result[:MAX_SCRAPE_CHARS] + "\n\n[Content truncated to preserve context window]"
+        return result
+
 # Tools
 search_tool = SerperDevTool()
-scrape_tool = ScrapeWebsiteTool()
+scrape_tool = BoundedScrapeWebsiteTool()
 
 # Define the CrewAI agent
 assistant = Agent(
@@ -37,7 +52,9 @@ assistant = Agent(
     llm=LLM(
         model="openai/gpt-4o-mini",
         api_key=os.environ.get("OPENAI_API_KEY")
-    )
+    ),
+    max_iter=5,                   # Limit reasoning loops (default is 15)
+    respect_context_window=True,  # Auto-summarise when context fills up
 )
 
 @app.post("/a2a/task")
@@ -54,7 +71,8 @@ async def receive_task(payload: dict):
     crew = Crew(
         agents=[assistant],
         tasks=[task],
-        verbose=True
+        verbose=True,
+        memory=False,  # No cross-request memory accumulation
     )
 
     result = crew.kickoff()
