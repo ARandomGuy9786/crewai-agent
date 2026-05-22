@@ -51,7 +51,8 @@ assistant = Agent(
     tools=[search_tool, scrape_tool],
     llm=LLM(
         model="openai/gpt-4o-mini",
-        api_key=os.environ.get("OPENAI_API_KEY")
+        base_url="https://openrouter.ai/api/v1",
+        api_key=os.environ.get("OPENROUTER_API_KEY")
     ),
     max_iter=5,                   # Limit reasoning loops (default is 15)
     respect_context_window=True,  # Auto-summarise when context fills up
