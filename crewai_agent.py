@@ -76,7 +76,9 @@ async def receive_task(payload: dict):
         memory=False,  # No cross-request memory accumulation
     )
 
-    result = crew.kickoff()
+    # crewai >= 1.14 forbids the synchronous kickoff() inside a running event
+    # loop (this handler is async). Use the async variant.
+    result = await crew.kickoff_async()
     return {
         "status": "completed",
         "agent": "crewai-agent",
